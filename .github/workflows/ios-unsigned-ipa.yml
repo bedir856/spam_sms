@@ -1,0 +1,65 @@
+name: Build Unsigned iOS IPA
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build Unsigned iOS IPA
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate iOS project (Expo Prebuild)
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Build iOS App (Release, Unsigned)
+        run: |
+          cd ios
+          
+          # Derleme işlemini xcodebuild ile imzasız (Unsigned) yapıyoruz.
+          # CODE_SIGNING_REQUIRED=NO kodu Apple Geliştirici kimliği kontrolünü atlar.
+          xcodebuild \
+            -workspace *.xcworkspace \
+            -scheme "Spam Mesaj Engelleyici" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build \
+            -derivedDataPath build \
+            -quiet
+
+      - name: Package .app to .ipa (Payload Format)
+        run: |
+          cd ios/build/Build/Products/Release-iphoneos
+          # .app klasörünü Payload klasörünün içine almak mecburidir (Apple yapısı)
+          mkdir Payload
+          cp -R *.app Payload/
+          zip -qr spam-mesaj-engelleyici-unsigned.ipa Payload
+          
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Spam-Engelleyici-Unsigned-IPA
+          path: ios/build/Build/Products/Release-iphoneos/spam-mesaj-engelleyici-unsigned.ipa
+          retention-days: 7
